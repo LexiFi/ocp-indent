@@ -13,6 +13,13 @@
 
 module SS = Set.Make(String)
 
+module Findlib = struct
+  let package_directory _ = assert false
+  let package_property _ _ _ = assert false
+  let resolve_path ~base:_ _ = assert false
+  let package_deep_ancestors _ _ = []
+end
+
 let loaded = ref SS.empty
 
 let predicates =

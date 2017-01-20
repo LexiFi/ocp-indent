@@ -269,6 +269,8 @@ let float_literal =
   ['0'-'9'] ['0'-'9' '_']*
     ('.' ['0'-'9' '_']* )?
       (['e' 'E'] ['+' '-']? ['0'-'9'] ['0'-'9' '_']*)?
+let date_literal =
+  ['0'-'9'] ['0'-'9'] ['0'-'9'] ['0'-'9'] '-' ['0'-'9'] ['0'-'9'] '-' ['0'-'9'] ['0'-'9']
 
 rule parse_token = parse
   | newline
@@ -299,7 +301,7 @@ rule parse_token = parse
            raise (Error(Keyword_as_label name, Location.curr lexbuf));
         *)
         OPTLABEL name }
-  | lowercase identchar * ( '%' identchar + ('.' identchar +) * ) ?
+  | lowercase identchar * '~' ? ( '%' identchar + ('.' identchar +) * ) ?
     { let s = Lexing.lexeme lexbuf in
       try
         let i = String.index_from s 1 '%' in
@@ -311,6 +313,8 @@ rule parse_token = parse
         with Not_found -> LIDENT s }
   | uppercase identchar *
     { UIDENT(Lexing.lexeme lexbuf) }      (* No capitalized keywords *)
+  | date_literal
+    { DATE (Lexing.lexeme lexbuf) }
   | int_literal
     { INT (can_overflow cvt_int_literal lexbuf) }
   | float_literal

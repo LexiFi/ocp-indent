@@ -30,6 +30,7 @@ module Node = struct
     | KLet
     | KAnd of kind
     | KLetIn
+    | KLazyLetIn
     | KIn
 
     | KExpr of int
@@ -107,6 +108,7 @@ module Node = struct
     | KIn -> "KIn"
     | KAnd k -> aux "KAnd" k
     | KLetIn -> "KLetIn"
+    | KLazyLetIn -> "KLazyLetIn"
     | KBody k -> aux "KBody" k
     | KArrow k -> aux "KArrow" k
     | KColon -> "KColon"
@@ -348,6 +350,7 @@ let rec is_inside_type path =
   match unwind (function
       | KParen | KBegin | KBracket | KBrace | KBracketBar
       | KVal | KLet | KLetIn | KBody (KVal | KLet | KLetIn)
+      | KLazyLetIn | KBody (KLazyLetIn)
       | KBody(KType|KExternal) | KColon
       | KStruct | KSig | KObject -> true
       | _ -> false)
@@ -886,6 +889,7 @@ let rec update_path config block stream tok =
            append KLet L (unwind_top p)
        | [] | {kind=KCodeInComment}::_ as p->
            append KLet L (unwind_top p)
+       | {kind=KLazyLetIn}::_ -> block.path
        | _ ->
            append KLetIn L (fold_expr block.path))
       (* - or if after a specific token *)
@@ -913,7 +917,7 @@ let rec update_path config block stream tok =
 
   | AND ->
       let unwind_to = function
-        | KLet | KLetIn | KType | KModule -> true
+        | KLet | KLetIn | KLazyLetIn | KType | KModule -> true
         | _ -> false
       in let path = unwind (unwind_to @* follow) block.path in
       (match path with
@@ -931,7 +935,7 @@ let rec update_path config block stream tok =
 
   | IN ->
       let path =
-        unwind ((function KLetIn | KLet -> true | _ -> false) @* follow)
+        unwind ((function KLetIn | KLet | KLazyLetIn -> true | _ -> false) @* follow)
           block.path
       in
       let pad = match next_token stream with
@@ -944,6 +948,7 @@ let rec update_path config block stream tok =
 
   | TYPE ->
       (match last_token block with
+       | Some LET -> block.path (* let type *)
        | Some (MODULE | CLASS) -> append KUnknown L block.path (* module type *)
        | Some (WITH|AND)
        | Some COLON (* 'type' inside type decl, for GADTs *)
@@ -1083,7 +1088,7 @@ let rec update_path config block stream tok =
       let path = unwind (function
           | KParen | KBegin | KBracket | KBrace | KBracketBar
           | KWith(KMatch|KTry) | KBar(KMatch|KTry) | KArrow(KMatch|KTry)
-          | KLet | KLetIn
+          | KLet | KLetIn | KLazyLetIn
           | KBody(KType) -> true
           | _ -> false)
           block.path
@@ -1164,6 +1169,7 @@ let rec update_path config block stream tok =
       let unwind_to = function
         | KParen | KBegin | KBrace | KBracket | KBracketBar | KBody _
         | KExternal | KModule | KType | KLet | KLetIn | KException | KVal
+        | KLazyLetIn | KAnd (KLazyLetIn)
         | KBar KType
         | KStruct | KSig | KObject
         | KAnd(KModule|KType|KLet|KLetIn) -> true
@@ -1221,14 +1227,14 @@ let rec update_path config block stream tok =
   | COLON ->
       let path = unwind (function
           | KParen | KBegin | KBrace | KBracket | KBracketBar | KBody _
-          | KModule | KLet | KLetIn | KExternal | KVal
-          | KAnd(KModule|KLet|KLetIn) -> true
+          | KModule | KLet | KLetIn | KLazyLetIn | KExternal | KVal
+          | KAnd(KModule|KLet|KLetIn|KLazyLetIn) -> true
           | _ -> false)
           block.path
       in
       (match path with
-       | {kind = KModule|KLet|KLetIn|KExternal
-         | KAnd(KModule|KLet|KLetIn|KExternal)} :: _ ->
+       | {kind = KModule|KLet|KLetIn|KLazyLetIn|KExternal
+         | KAnd(KModule|KLet|KLetIn|KLazyLetIn|KExternal)} :: _ ->
            append KColon L path
        | {kind=KVal} :: {kind=KObject} :: _ ->
            make_infix tok path
@@ -1327,7 +1333,7 @@ let rec update_path config block stream tok =
   | LABEL _ | OPTLABEL _ ->
       (match
         unwind_while (function
-          | KExpr _ | KLet | KLetIn | KFun | KAnd(KLet|KLetIn) -> true
+          | KExpr _ | KLet | KLetIn | KLazyLetIn | KFun | KAnd(KLet|KLetIn|KLazyLetIn) -> true
           | _ -> false)
           block.path
       with
@@ -1362,7 +1368,7 @@ let rec update_path config block stream tok =
              ) (atom block.path)
        | _ -> atom block.path)
 
-  | INT64 _ | INT32 _ | INT _ | LIDENT _
+  | INT64 _ | INT32 _ | INT _ | LIDENT _ | DATE _
   | FLOAT _ | CHAR _ | STRING _
   | TRUE | FALSE | NATIVEINT _
   | UNDERSCORE | TILDE | QUESTION
@@ -1374,7 +1380,12 @@ let rec update_path config block stream tok =
          ( append is not right for atoms ) *)
       atom block.path
 
-  | ASSERT | LAZY | NEW | MUTABLE ->
+  | LAZY ->
+    (match next_token stream with
+    | Some LET -> append KLazyLetIn L (before_append_atom block.path)
+    | _ -> append expr_apply L (before_append_atom block.path))
+
+  | ASSERT | NEW | MUTABLE ->
       append expr_apply L (before_append_atom block.path)
 
   | INHERIT -> append (KExpr 0) L (unwind_top block.path)

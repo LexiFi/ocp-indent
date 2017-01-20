@@ -49,6 +49,7 @@ type token =
     (* Continuation of comment after a closed ocamldoc code or verb section *)
   | COMMENTCONT
   | CONSTRAINT
+  | DATE of (string)
   | DO
   | DONE
   | DOT

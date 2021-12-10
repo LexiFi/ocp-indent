@@ -85,8 +85,9 @@ let indent_file args = function
       let ic = open_in path in
       try
         indent_channel ic args config out perm;
+        close_in ic;
         match out, need_move with
-        | Some src, Some dst -> Sys.rename src dst
+        | Some src, Some dst -> Sys.remove dst; Sys.rename src dst
         | _, _ -> ()
       with e ->
           close_in ic; raise e

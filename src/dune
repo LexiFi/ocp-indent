@@ -31,7 +31,8 @@
  (public_name ocp-indent.dynlink)
  (wrapped false)
  (modules indentLoader)
- (libraries findlib dynlink ocp-indent.lexer ocp-indent.utils)
+ (libraries ;; findlib
+  dynlink ocp-indent.lexer ocp-indent.utils)
 )
 (executable
  (name indentMain)

@@ -1,4 +1,4 @@
-;;; ocp-indent.el --- automatic indentation with ocp-indent
+;;; ocp-indent.el --- automatic indentation with ocp-indent -*- lexical-binding: t -*-
 ;;
 ;; Copyright 2012-2013 OCamlPro
 
@@ -136,7 +136,7 @@ buffer."
 
 (defun ocp-indent-buffer ()
   (interactive nil)
-  (ocp-indent-region 0 (buffer-size)))
+  (ocp-indent-region (point-min) (point-max)))
 
 ;;;###autoload
 (defun ocp-setup-indent ()
